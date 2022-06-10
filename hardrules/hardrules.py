@@ -12,7 +12,7 @@ try:
     from .tokenizer import Tokenizer
 except (SystemError, ImportError):
     from lm import load_lm_filter
-    from tokenizer import Tokenizer 
+    from tokenizer import Tokenizer
 
 tbl_non_alpha = [chr(i) for i in range(sys.maxunicode) if not cat(chr(i)).startswith('L')]
 tbl_non_alpha = str.maketrans('', '', ''.join(tbl_non_alpha))
@@ -33,6 +33,10 @@ regex_escaped_unicode = regex.compile("[\\\\]u[0-9a-fA-F]{3,}")
 regex_glued_words = regex.compile("([[:alpha:]]*[[:upper:]]{1}[[:lower:]]+){3}")
 regex_repeated_words = regex.compile(r"\b(.+)\\1\b")
 regex_repeated_without_words = regex.compile(r"(.+)\\1")
+
+regex_number_start=regex.compile("^[0-9]+")
+regex_number_space=regex.compile("^[0-9]+(?![0-9 ])")
+regex_number_nospace=regex.compile("^[0-9]+(?![0-9]) ")
 
 safe_noise_detection_langs = {"en", "es", "fr", "pl", "de", "it", "pt", "nl", "cs", "ro", "fi", "lv", "et", "bg", "hr", "da", "hu", "ga", "eu", "gl", "sl", "sv", "mt", "sk", "is", "lt", "nb", "nn", "no"}
 
@@ -65,6 +69,7 @@ class Hardrules():
     rule_pipeline['no_wrong_language'] = True
     rule_pipeline['no_porn'] = 'sl'
     rule_pipeline['lm_filter'] = True
+    rule_pipeline['no_number_inconsistency'] = True
 
     def __init__(self, args):
         # Load LM
@@ -301,3 +306,15 @@ class Hardrules():
             raise Exception(f"c_no_porn rule needs 'sl' or 'tl' param, not {self.porn_removal_side}")
 
         return self.porn_removal.predict(self.porn_tokenizer.detokenize(tok))[0][0] == '__label__negative'
+
+    def c_no_number_inconsistency(self, left, right):
+        #if one starts with number+space and the other with number+nospace
+        if (regex.search(regex_number_space,left) and regex.search(regex_number_nospace,right)) or \
+        (regex.search(regex_number_space,right) and regex.search(regex_number_nospace,left)):
+            return False
+
+        #if one starts with number and the other doesn't
+        if (regex.search(regex_number_start,left) and not regex.search(regex_number_start,right)) or \
+        (regex.search(regex_number_start,right) and not regex.search(regex_number_start,left)):
+            return False
+        return True
